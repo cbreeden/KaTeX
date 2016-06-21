@@ -199,21 +199,12 @@ Parser.prototype.parseExpression = function(breakOnInfix, breakOnToken) {
 // The greediness of a superscript or subscript
 var SUPSUB_GREEDINESS = 1;
 
-/**
- * Handle a subscript or superscript with nice errors.
- */
-Parser.prototype.handleSupSubscript = function(name) {
+Parser.prtototype.tryFunctionExpand = function(parentGreediness) {
     var token = this.nextToken.text;
-    var symPos = this.pos;
 
-    this.consume();
-
-    // We really are looking for either a symbol, function, or group
-    // but we need to handle functions in a special manner for greediness
     if (this.isFunction(token)) {
-        // ^ and _ have a greediness, compare with functions' greediness
         var funcGreediness = functions[token].greediness;
-        if (funcGreediness > SUPSUB_GREEDINESS) {
+        if (funcGreediness > parentGreediness) {
             return this.parseFunction();
         } else {
             throw new ParseError(
@@ -221,21 +212,39 @@ Parser.prototype.handleSupSubscript = function(name) {
                     "as " + name,
                 this.lexer, symPos + 1);
         }
-    }
-
-    var group = this.parseSymbol() || this.parseGroup();
-    if (!group) {
-        if (!this.settings.throwOnError && this.nextToken.text[0] === "\\") {
-            return this.handleUnsupportedCmd();
-        } else {
-            throw new ParseError(
-                "Expected group after '" + symbol + "'",
-                this.lexer,
-                symPos + 1
-            );
-        }
     } else {
-        return group.result;
+        return null;
+    }
+}
+
+Parser.prototype.expectedGroupError = function(symbol, pos) {
+    if (!this.settings.throwOnError && this.nextToken.text[0] === "\\") {
+        return this.handleUnsupportedCmd();
+    } else {
+        throw new ParseError(
+            "Expected group after '" + symbol + "'",
+            this.lexer,
+            pos
+        );
+    }
+}
+
+/**
+ * Handle a subscript or superscript with nice errors.
+ */
+Parser.prototype.handleSupSubscript = function(name) {
+    var token = this.nextToken.text;
+    var symPos = this.pos;
+    this.consume();
+
+    var group = this.parseSymbol() || 
+                this.parseGroup()  ||
+                this.tryFunctionExpand(SUPSUB_GREEDINESS);
+
+    if (!group) {
+        return this.expectedGroupError(symbol, symPos + 1);
+    } else {
+        return group;
     }
 };
 
@@ -511,8 +520,10 @@ Parser.prototype.callFunction = function(name, args, positions) {
  * @return the array of arguments, with the list of positions as last element
  */
 Parser.prototype.parseArguments = function(func, funcData) {
-    var totalArgs = funcData.numArgs + funcData.numOptionalArgs;
-    if (totalArgs === 0) {
+    var numArgs = funcData.numArgs;
+    var numOptArgs = funcData.numOptionalArgs;
+
+    if (numArgs === 0 && numOptArgs === 0) {
         return [[this.pos]];
     }
 
@@ -520,66 +531,30 @@ Parser.prototype.parseArguments = function(func, funcData) {
     var positions = [this.pos];
     var args = [];
 
-    for (var i = 0; i < totalArgs; i++) {
+    for (var i = 0; i < numOptArgs; i++) {
         var argType = funcData.argTypes && funcData.argTypes[i];
-        var arg;
-        if (i < funcData.numOptionalArgs) {
-            if (argType) {
-                arg = this.parseSpecialGroup(argType, true);
-            } else {
+        var arg;     
+ 
+        if (argType) {
+            arg = this.parseSpecialGroup(argType, true);
+        } else {
+            if (i < numOptArgs) {
                 arg = this.parseOptionalGroup();
-            }
-            if (!arg) {
-                args.push(null);
-                positions.push(this.pos);
-                continue;
-            }
-        } else {
-            if (argType) {
-                arg = this.parseSpecialGroup(argType);
             } else {
-                // An argument of a function will be either:
-                // - Another function, whose greediness needs to be checked
-                // - A symbol
-                // - An explicit group: {...}
-                var token = this.nextToken;
-
-
-                arg = this.parseGroup();
-            }
-            if (!arg) {
-                if (!this.settings.throwOnError &&
-                    this.nextToken.text[0] === "\\") {
-                    arg = new ParseFuncOrArgument(
-                        this.handleUnsupportedCmd(this.nextToken.text),
-                        false);
-                } else {
-                    throw new ParseError(
-                        "Expected group after '" + func + "'",
-                        this.lexer, this.pos);
-                }
+                arg = this.parseSymbol() ||
+                      this.parseGroup()  ||
+                      this.tryFunctionExpand(baseGreediness);
             }
         }
-        var argNode;
-        if (arg.isFunction) {
-            var argGreediness =
-                functions[arg.result].greediness;
-            if (argGreediness > baseGreediness) {
-                argNode = this.parseFunction(arg);
-            } else {
-                throw new ParseError(
-                    "Got function '" + arg.result + "' as " +
-                    "argument to '" + func + "'",
-                    this.lexer, this.pos - 1);
-            }
-        } else {
-            argNode = arg.result;
+
+        // Error if not given an argument for non-optional argument.
+        if (!arg && i >= numOptArgs) {
+            arg = this.expectedGroupError(func, this.pos);
         }
-        args.push(argNode);
+
+        args.push(arg ? arg : null);
         positions.push(this.pos);
     }
-
-    args.push(positions);
 
     return args;
 };
