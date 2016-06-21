@@ -119,7 +119,6 @@ Parser.prototype.parseExpression = function(breakOnInfix, breakOnToken) {
     // we reached the end, a }, or a \right)
     while (true) {
         var lex = this.nextToken;
-        var pos = this.pos;
         if (endOfExpression.indexOf(lex.text) !== -1) {
             break;
         }
@@ -131,7 +130,6 @@ Parser.prototype.parseExpression = function(breakOnInfix, breakOnToken) {
             if (!this.settings.throwOnError && lex.text[0] === "\\") {
                 var errorNode = this.handleUnsupportedCmd();
                 body.push(errorNode);
-                pos = lex.position;
                 continue;
             }
             break;
@@ -139,7 +137,7 @@ Parser.prototype.parseExpression = function(breakOnInfix, breakOnToken) {
         body.push(atom);
 
         if (breakOnInfix && atom.type === "infix") {
-            break; 
+            break;
         }
     }
 };
@@ -199,7 +197,7 @@ Parser.prototype.parseExpression = function(breakOnInfix, breakOnToken) {
 // The greediness of a superscript or subscript
 var SUPSUB_GREEDINESS = 1;
 
-Parser.prtototype.tryFunctionExpand = function(parentGreediness) {
+Parser.prtototype.tryFunctionExpand = function(parentGreediness, pos) {
     var token = this.nextToken.text;
 
     if (this.isFunction(token)) {
@@ -208,14 +206,14 @@ Parser.prtototype.tryFunctionExpand = function(parentGreediness) {
             return this.parseFunction();
         } else {
             throw new ParseError(
-                "Got function '" + group.result + "' with no arguments " +
+                "Got function '" + token + "' with no arguments " +
                     "as " + name,
-                this.lexer, symPos + 1);
+                this.lexer, pos);
         }
     } else {
         return null;
     }
-}
+};
 
 Parser.prototype.expectedGroupError = function(symbol, pos) {
     if (!this.settings.throwOnError && this.nextToken.text[0] === "\\") {
@@ -227,22 +225,21 @@ Parser.prototype.expectedGroupError = function(symbol, pos) {
             pos
         );
     }
-}
+};
 
 /**
  * Handle a subscript or superscript with nice errors.
  */
 Parser.prototype.handleSupSubscript = function(name) {
-    var token = this.nextToken.text;
     var symPos = this.pos;
     this.consume();
 
-    var group = this.parseSymbol() || 
+    var group = this.parseSymbol() ||
                 this.parseGroup()  ||
                 this.tryFunctionExpand(SUPSUB_GREEDINESS);
 
     if (!group) {
-        return this.expectedGroupError(symbol, symPos + 1);
+        return this.expectedGroupError(name, symPos + 1);
     } else {
         return group;
     }
@@ -300,7 +297,7 @@ Parser.prototype.parseAtom = function() {
     } else {
         return this.handleScripts(base);
     }
-}
+};
 
 Parser.prototype.handleScripts = function(base) {
     // Note that base may be empty (i.e. null) at this point.
@@ -475,23 +472,21 @@ Parser.prototype.parseImplicitGroup = function() {
  * @return {?ParseNode}
  */
 Parser.prototype.parseFunction = function(funcName) {
-    var token = this.nextToken;
-    var funcData = functions[token];
+    var func = this.nextToken;
+    var funcData = functions[func];
 
-    if (baseGroup.isFunction) {
-        var func = baseGroup.result;
-        var funcData = functions[func];
+    if (funcData) {
         if (this.mode === "text" && !funcData.allowedInText) {
             throw new ParseError(
                 "Can't use function '" + func + "' in text mode",
-                this.lexer, baseGroup.position);
+                this.lexer, this.position);
         }
 
         var args = this.parseArguments(func, funcData);
         var result = this.callFunction(func, args, args.pop());
         return new ParseNode(result.type, result, this.mode);
     } else {
-        return baseGroup.result;
+        return null;
     }
 };
 
@@ -533,8 +528,8 @@ Parser.prototype.parseArguments = function(func, funcData) {
 
     for (var i = 0; i < numOptArgs; i++) {
         var argType = funcData.argTypes && funcData.argTypes[i];
-        var arg;     
- 
+        var arg;
+
         if (argType) {
             arg = this.parseSpecialGroup(argType, true);
         } else {
@@ -594,9 +589,7 @@ Parser.prototype.parseSpecialGroup = function(innerMode, optional) {
         }
         this.consume(); // consume the token stored in inner
         this.expect(optional ? "]" : "}");
-        return new ParseFuncOrArgument(
-            new ParseNode(innerMode, data, outerMode),
-            false);
+        return new ParseNode(innerMode, data, outerMode);
     } else if (innerMode === "text") {
         // text mode is special because it should ignore the whitespace before
         // it
@@ -633,11 +626,8 @@ Parser.prototype.parseGroup = function() {
         var expression = this.parseExpression(false);
         // Make sure we get a close brace
         this.expect("}");
-        return new ParseFuncOrArgument(
-            new ParseNode("ordgroup", expression, this.mode),
-            false);
+        return new new ParseNode("ordgroup", expression, this.mode);
     } else {
-        // Otherwise, just return a nucleus
         return null;
     }
 };
@@ -656,11 +646,8 @@ Parser.prototype.parseOptionalGroup = function() {
         var expression = this.parseExpression(false, "]");
         // Make sure we get a close bracket
         this.expect("]");
-        return new ParseFuncOrArgument(
-            new ParseNode("ordgroup", expression, this.mode),
-            false);
+        return new new ParseNode("ordgroup", expression, this.mode);
     } else {
-        // Otherwise, return null,
         return null;
     }
 };
