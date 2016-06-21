@@ -19,6 +19,8 @@
 module.exports = {
     math: {},
     text: {},
+    // TODO (cbreeden) accent may change if we have textmode accents.
+    accent: {},
 };
 
 function defineSymbol(mode, font, group, replace, name) {
@@ -27,6 +29,24 @@ function defineSymbol(mode, font, group, replace, name) {
         group: group,
         replace: replace,
     };
+}
+
+function declareMathOperator(font, group, replace, name, limits) {
+    module.exports["math"][name] = {
+        font: font,
+        group: group,
+        replace: replace,
+        limits: !!limits,
+        symbol: true, // for backwards compatibility for now (remove this)
+    }
+}
+
+function defineAccent(font, group, replace, name) {
+    module.exports["accent"][name] = {
+        font: font,
+        group: group,
+        replace: replace,
+    }
 }
 
 // Some abbreviations for commonly used strings.
@@ -554,38 +574,42 @@ defineSymbol(math, main, rel, "\u2193", "\\downarrow");
 defineSymbol(math, main, rel, "\u21d3", "\\Downarrow");
 defineSymbol(math, main, rel, "\u2195", "\\updownarrow");
 defineSymbol(math, main, rel, "\u21d5", "\\Updownarrow");
-defineSymbol(math, math, op, "\u2210", "\\coprod");
-defineSymbol(math, math, op, "\u22c1", "\\bigvee");
-defineSymbol(math, math, op, "\u22c0", "\\bigwedge");
-defineSymbol(math, math, op, "\u2a04", "\\biguplus");
-defineSymbol(math, math, op, "\u22c2", "\\bigcap");
-defineSymbol(math, math, op, "\u22c3", "\\bigcup");
-defineSymbol(math, math, op, "\u222b", "\\int");
-defineSymbol(math, math, op, "\u222b", "\\intop");
-defineSymbol(math, math, op, "\u222c", "\\iint");
-defineSymbol(math, math, op, "\u222d", "\\iiint");
-defineSymbol(math, math, op, "\u220f", "\\prod");
-defineSymbol(math, math, op, "\u2211", "\\sum");
-defineSymbol(math, math, op, "\u2a02", "\\bigotimes");
-defineSymbol(math, math, op, "\u2a01", "\\bigoplus");
-defineSymbol(math, math, op, "\u2a00", "\\bigodot");
-defineSymbol(math, math, op, "\u222e", "\\oint");
-defineSymbol(math, math, op, "\u2a06", "\\bigsqcup");
-defineSymbol(math, math, op, "\u222b", "\\smallint");
+
+declareMathOperator(math, math, op, "\u2210", "\\coprod", true);
+declareMathOperator(math, math, op, "\u22c1", "\\bigvee", true);
+declareMathOperator(math, math, op, "\u22c0", "\\bigwedge", true);
+declareMathOperator(math, math, op, "\u2a04", "\\biguplus", true);
+declareMathOperator(math, math, op, "\u22c2", "\\bigcap", true);
+declareMathOperator(math, math, op, "\u22c3", "\\bigcup", true);
+declareMathOperator(math, math, op, "\u222b", "\\int", false);
+declareMathOperator(math, math, op, "\u222b", "\\intop", true);
+declareMathOperator(math, math, op, "\u222c", "\\iint", false);
+declareMathOperator(math, math, op, "\u222d", "\\iiint", false);
+declareMathOperator(math, math, op, "\u220f", "\\prod", true);
+declareMathOperator(math, math, op, "\u2211", "\\sum", true);
+declareMathOperator(math, math, op, "\u2a02", "\\bigotimes", true);
+declareMathOperator(math, math, op, "\u2a01", "\\bigoplus", true);
+declareMathOperator(math, math, op, "\u2a00", "\\bigodot", true);
+declareMathOperator(math, math, op, "\u222e", "\\oint", false);
+declareMathOperator(math, math, op, "\u2a06", "\\bigsqcup", true);
+declareMathOperator(math, math, op, "\u222b", "\\smallint", true);
+
 defineSymbol(math, main, inner, "\u2026", "\\ldots");
 defineSymbol(math, main, inner, "\u22ef", "\\cdots");
 defineSymbol(math, main, inner, "\u22f1", "\\ddots");
 defineSymbol(math, main, textord, "\u22ee", "\\vdots");
-defineSymbol(math, main, accent, "\u00b4", "\\acute");
-defineSymbol(math, main, accent, "\u0060", "\\grave");
-defineSymbol(math, main, accent, "\u00a8", "\\ddot");
-defineSymbol(math, main, accent, "\u007e", "\\tilde");
-defineSymbol(math, main, accent, "\u00af", "\\bar");
-defineSymbol(math, main, accent, "\u02d8", "\\breve");
-defineSymbol(math, main, accent, "\u02c7", "\\check");
-defineSymbol(math, main, accent, "\u005e", "\\hat");
-defineSymbol(math, main, accent, "\u20d7", "\\vec");
-defineSymbol(math, main, accent, "\u02d9", "\\dot");
+
+defineAccent(math, main, accent, "\u00b4", "\\acute");
+defineAccent(math, main, accent, "\u0060", "\\grave");
+defineAccent(math, main, accent, "\u00a8", "\\ddot");
+defineAccent(math, main, accent, "\u007e", "\\tilde");
+defineAccent(math, main, accent, "\u00af", "\\bar");
+defineAccent(math, main, accent, "\u02d8", "\\breve");
+defineAccent(math, main, accent, "\u02c7", "\\check");
+defineAccent(math, main, accent, "\u005e", "\\hat");
+defineAccent(math, main, accent, "\u20d7", "\\vec");
+defineAccent(math, main, accent, "\u02d9", "\\dot");
+
 defineSymbol(math, main, mathord, "\u0131", "\\imath");
 defineSymbol(math, main, mathord, "\u0237", "\\jmath");
 

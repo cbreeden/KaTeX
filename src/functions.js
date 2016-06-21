@@ -346,35 +346,35 @@ defineFunction([
     };
 });
 
-// No limits, symbols
-defineFunction([
-    "\\int", "\\iint", "\\iiint", "\\oint",
-], {
-    numArgs: 0,
-}, function(context) {
-    return {
-        type: "op",
-        limits: false,
-        symbol: true,
-        body: context.funcName,
-    };
-});
+// // No limits, symbols
+// defineFunction([
+//     "\\int", "\\iint", "\\iiint", "\\oint",
+// ], {
+//     numArgs: 0,
+// }, function(context) {
+//     return {
+//         type: "op",
+//         limits: false,
+//         symbol: true,
+//         body: context.funcName,
+//     };
+// });
 
-// Limits, symbols
-defineFunction([
-    "\\coprod", "\\bigvee", "\\bigwedge", "\\biguplus", "\\bigcap",
-    "\\bigcup", "\\intop", "\\prod", "\\sum", "\\bigotimes",
-    "\\bigoplus", "\\bigodot", "\\bigsqcup", "\\smallint",
-], {
-    numArgs: 0,
-}, function(context) {
-    return {
-        type: "op",
-        limits: true,
-        symbol: true,
-        body: context.funcName,
-    };
-});
+// // Limits, symbols
+// defineFunction([
+//     "\\coprod", "\\bigvee", "\\bigwedge", "\\biguplus", "\\bigcap",
+//     "\\bigcup", "\\intop", "\\prod", "\\sum", "\\bigotimes",
+//     "\\bigoplus", "\\bigodot", "\\bigsqcup", "\\smallint",
+// ], {
+//     numArgs: 0,
+// }, function(context) {
+//     return {
+//         type: "op",
+//         limits: true,
+//         symbol: true,
+//         body: context.funcName,
+//     };
+// });
 
 // Fractions
 defineFunction([

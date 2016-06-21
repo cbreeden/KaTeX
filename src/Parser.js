@@ -156,15 +156,15 @@ Parser.prototype.parseExpression = function(breakOnInfix, breakOnToken) {
 
             break;
         }
-        if (breakOnInfix && atom.type === "infix") {
-            // rewind so we can parse the infix atom again
-            this.pos = pos;
-            this.nextToken = lex;
-            break;
-        }
         body.push(atom);
+
+        if (breakOnInfix && atom.type === "infix") {
+            break; 
+        }
+
+        // Can find a better solution if we 'flatten' the parser a little bit.
+        if ()
     }
-    return this.handleInfixNodes(body);
 };
 
 /**
@@ -297,6 +297,34 @@ Parser.prototype.handleUnsupportedCmd = function() {
  * @return {?ParseNode}
  */
 Parser.prototype.parseAtom = function() {
+    var token = this.nextToken;
+
+    // First check if we have a symbol
+    var sym = this.parseSymbol();
+    if (sym) {
+        return this.handleScripts(sym);
+    }
+
+    // Next look for functions
+    var funcData = functions[token];
+    if (funcData) {
+        this.consume();
+        var func = token;
+        
+        if (this.mode === "text" && !funcData.allowedInText) {
+            throw  new ParseErro(
+                "Can't use function '" + func + "' in text mode",
+                this.lexer, this.pos);
+        }
+
+        var args = this.parseArguments(func, funcData);
+        var result = this.callFunction(func, args, args.pop());
+
+        return this.handleScripts(result);
+    }
+
+
+
     // The body of an atom is an implicit group, so that things like
     // \left(x\right)^2 work correctly.
     var base = this.parseImplicitGroup();
@@ -397,7 +425,6 @@ var styleFuncs = [
  * @return {?ParseNode}
  */
 Parser.prototype.parseImplicitGroup = function() {
-    var start = this.parseSymbol();
 
     if (start == null) {
         // If we didn't get anything we handle, fall back to parseFunction
@@ -559,6 +586,13 @@ Parser.prototype.parseArguments = function(func, funcData) {
             if (argType) {
                 arg = this.parseSpecialGroup(argType);
             } else {
+                // An argument of a function will be either:
+                // - Another function, whose greediness needs to be checked
+                // - A symbol
+                // - An explicit group: {...}
+                var token = this.nextToken;
+
+
                 arg = this.parseGroup();
             }
             if (!arg) {
@@ -711,22 +745,11 @@ Parser.prototype.parseOptionalGroup = function() {
  */
 Parser.prototype.parseSymbol = function() {
     var nucleus = this.nextToken;
+    var sym = symbols[this.mode][nucleus.text];
 
-    if (functions[nucleus.text]) {
+    if (sym) {
         this.consume();
-        // If there exists a function with this name, we return the function and
-        // say that it is a function.
-        return new ParseFuncOrArgument(
-            nucleus.text,
-            true);
-    } else if (symbols[this.mode][nucleus.text]) {
-        this.consume();
-        // Otherwise if this is a no-argument function, find the type it
-        // corresponds to in the symbols map
-        return new ParseFuncOrArgument(
-            new ParseNode(symbols[this.mode][nucleus.text].group,
-                          nucleus.text, this.mode),
-            false);
+        return new ParseNode(sym.group, sym, this.mode);
     } else {
         return null;
     }
