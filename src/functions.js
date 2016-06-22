@@ -477,19 +477,6 @@ defineFunction([
     }
 });
 
-// Sizing functions (handled in Parser.js explicitly, hence no handler)
-// defineFunction([
-//     "\\tiny", "\\scriptsize", "\\footnotesize", "\\small",
-//     "\\normalsize", "\\large", "\\Large", "\\LARGE", "\\huge", "\\Huge",
-// ], 0, null);
-
-// Style changing functions (handled in Parser.js explicitly, hence no
-// handler)
-// defineFunction([
-//     "\\displaystyle", "\\textstyle", "\\scriptstyle",
-//     "\\scriptscriptstyle",
-// ], 0, null);
-
 defineFunction([
     // styles
     "\\mathrm", "\\mathit", "\\mathbf",
