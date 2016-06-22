@@ -101,6 +101,11 @@ Parser.prototype.parse = function() {
 
 var endOfExpression = ["}", "\\end", "\\right", "&", "\\\\", "\\cr", "EOF"];
 
+var STYLES = 1;
+var INFIX = 2;
+
+infixOperators = { "\\over": "\\frac", "\\choose": "\\binom" }
+
 /**
  * Parses an "expression", which is a list of atoms.
  *
@@ -125,7 +130,24 @@ Parser.prototype.parseExpression = function(breakOnInfix, breakOnToken) {
         if (breakOnToken && lex.text === breakOnToken) {
             break;
         }
-        var atom = this.parseAtom(body);
+
+        // infix operators need to be handled in a special way
+        if (infixOperators[lex.text]) {
+            if (breakOnInfix === INFIX) {
+                throw new ParseError("Only one infix operator per group",  
+                    this.lexer, -1);                
+            } else if (breakOnInfix === STYLES) {
+                break;
+            }
+
+            // Infix operators will consume an entire mathlist
+            this.consume();
+            var denom = this.parseExpression(INFIX);
+            return body = [ this.compileInfix(infixOperators[lex.text], body, denom) ];
+        }
+
+        var atom = this.parseAtom();
+
         if (!atom) {
             if (!this.settings.throwOnError && lex.text[0] === "\\") {
                 var errorNode = this.handleUnsupportedCmd();
@@ -134,19 +156,6 @@ Parser.prototype.parseExpression = function(breakOnInfix, breakOnToken) {
             }
             throw new ParseError(
                 'Unsupported command "' + lex.text + '"', this.lex, this.pos);
-        }
-
-        if (atom.type === "infix") {
-            if (breakOnInfix) {
-                body.push(atom); 
-                break; 
-            }
-
-            var numer = body;
-            var denom = this.parseExpression(true);
-
-            // Infix operators will consume an entire mathlist
-            return body = [ this.handleInfix(atom.value.replaceWith, numer, denom) ];
         }
 
         body.push(atom);
@@ -163,14 +172,7 @@ Parser.prototype.parseExpression = function(breakOnInfix, breakOnToken) {
  *
  * @returns {Array}
  */
-Parser.prototype.handleInfix = function(funcName, numerBody, denomBody) {
-    // Check if we broke on Infix, inside an Infix.
-    var lastToken = denomBody[denomBody.length - 1];
-    if (lastToken && lastToken.type === "infix") {
-        throw new ParseError("Only one infix operator per group",  
-            this.lexer, -1);
-    }
-
+Parser.prototype.compileInfix = function(funcName, numerBody, denomBody) {
     var numerNode, denomNode;
     if (numerBody.length === 1 && numerBody[0].type === "ordgroup") {
         numerNode = numerBody[0];
@@ -232,11 +234,7 @@ Parser.prototype.handleSupSubscript = function(name) {
                 this.parseGroup()  ||
                 this.tryFunctionExpand(SUPSUB_GREEDINESS);
 
-    if (!group) {
-        return this.expectedGroupError(name, symPos + 1);
-    } else {
-        return group;
-    }
+    return group ? group : this.expectedGroupError(name, symPos + 1);
 };
 
 /**
@@ -277,23 +275,19 @@ Parser.prototype.handleUnsupportedCmd = function() {
  *
  * @return {?ParseNode}
  */
-Parser.prototype.parseAtom = function(body) {
+Parser.prototype.parseAtom = function() {
     // First we check if we have a either a Symbol, a
     // function, an implicit group, or explicit group, etc.
-    var base = this.parseSymbol()            ||
-               this.parseImplicitGroup(body) ||
-               this.parseGroup()             ||
+    var base = this.parseSymbol()        ||
+               this.parseImplicitGroup() ||
+               this.parseGroup()         ||
                this.parseFunction();
 
     // In text mode, we don't have superscripts or subscripts
     if (this.mode === "text") {
         return base;
-    } else {
-        return this.handleScripts(base);
-    }
-};
+    } 
 
-Parser.prototype.handleScripts = function(base) {
     // Note that base may be empty (i.e. null) at this point.
     // We now parse for a few non-standard command sequences
     // like \limits, and handle a sub/superscripts commands.
@@ -385,7 +379,7 @@ var styleFuncs = [
  *
  * @return {?ParseNode}
  */
-Parser.prototype.parseImplicitGroup = function(mathlist) {
+Parser.prototype.parseImplicitGroup = function() {
     var func = this.nextToken.text;
     var body;
 
@@ -447,7 +441,7 @@ Parser.prototype.parseImplicitGroup = function(mathlist) {
     } else if (utils.contains(styleFuncs, func)) {
         // If we see a styling function, parse out the implict body
         this.consume();
-        body = this.parseExpression(true);
+        body = this.parseExpression(STYLES);
         return new ParseNode("styling", {
             // Figure out what style to use by pulling out the style from
             // the function name
@@ -662,7 +656,7 @@ Parser.prototype.parseOptionalGroup = function() {
  * @return {?ParseFuncOrArgument}
  */
 Parser.prototype.parseSymbol = function() {
-    // TODO (cbreeden) hopefully we can get rid of the function check.
+    // TODO (cbreeden) hopefully we can get rid of the function check soon.
     var token = this.nextToken;
     if (this.isFunction(token.text)) {
         return null;

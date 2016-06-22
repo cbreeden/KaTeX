@@ -478,17 +478,17 @@ defineFunction([
 });
 
 // Sizing functions (handled in Parser.js explicitly, hence no handler)
-defineFunction([
-    "\\tiny", "\\scriptsize", "\\footnotesize", "\\small",
-    "\\normalsize", "\\large", "\\Large", "\\LARGE", "\\huge", "\\Huge",
-], 0, null);
+// defineFunction([
+//     "\\tiny", "\\scriptsize", "\\footnotesize", "\\small",
+//     "\\normalsize", "\\large", "\\Large", "\\LARGE", "\\huge", "\\Huge",
+// ], 0, null);
 
 // Style changing functions (handled in Parser.js explicitly, hence no
 // handler)
-defineFunction([
-    "\\displaystyle", "\\textstyle", "\\scriptstyle",
-    "\\scriptscriptstyle",
-], 0, null);
+// defineFunction([
+//     "\\displaystyle", "\\textstyle", "\\scriptstyle",
+//     "\\scriptscriptstyle",
+// ], 0, null);
 
 defineFunction([
     // styles
@@ -533,26 +533,6 @@ defineFunction([
     };
 });
 
-// Infix generalized fractions
-defineFunction(["\\over", "\\choose"], {
-    numArgs: 0,
-}, function(context) {
-    var replaceWith;
-    switch (context.funcName) {
-        case "\\over":
-            replaceWith = "\\frac";
-            break;
-        case "\\choose":
-            replaceWith = "\\binom";
-            break;
-        default:
-            throw new Error("Unrecognized infix genfrac command");
-    }
-    return {
-        type: "infix",
-        replaceWith: replaceWith,
-    };
-});
 
 // Row breaks for aligned data
 defineFunction(["\\\\", "\\cr"], {
