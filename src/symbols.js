@@ -31,22 +31,20 @@ function defineSymbol(mode, font, group, replace, name) {
     };
 }
 
-function declareMathOperator(font, group, replace, name, limits) {
+function declareMathOperator(mode, font, group, replace, name, limits) {
     module.exports["math"][name] = {
         font: font,
         group: group,
         replace: replace,
-        limits: !!limits,
-        symbol: true, // for backwards compatibility for now (remove this)
-    }
+    };
 }
 
-function defineAccent(font, group, replace, name) {
-    module.exports["accent"][name] = {
+function defineAccent(mode, font, group, replace, name) {
+    module.exports[mode][name] = {
         font: font,
         group: group,
         replace: replace,
-    }
+    };
 }
 
 // Some abbreviations for commonly used strings.

@@ -99,7 +99,7 @@ Parser.prototype.parse = function() {
     return parse;
 };
 
-var endOfExpression = ["}", "\\end", "\\right", "&", "\\\\", "\\cr"];
+var endOfExpression = ["}", "\\end", "\\right", "&", "\\\\", "\\cr", "EOF"];
 
 /**
  * Parses an "expression", which is a list of atoms.
@@ -125,21 +125,33 @@ Parser.prototype.parseExpression = function(breakOnInfix, breakOnToken) {
         if (breakOnToken && lex.text === breakOnToken) {
             break;
         }
-        var atom = this.parseAtom();
+        var atom = this.parseAtom(body);
         if (!atom) {
             if (!this.settings.throwOnError && lex.text[0] === "\\") {
                 var errorNode = this.handleUnsupportedCmd();
                 body.push(errorNode);
                 continue;
             }
-            break;
+            throw new ParseError(
+                'Unsupported command "' + lex.text + '"', this.lex, this.pos);
         }
-        body.push(atom);
 
-        if (breakOnInfix && atom.type === "infix") {
-            break;
+        if (atom.type === "infix") {
+            if (breakOnInfix) {
+                body.push(atom); 
+                break; 
+            }
+
+            var numer = body;
+            var denom = this.parseExpression(true);
+
+            // Infix operators will consume an entire mathlist
+            return body = [ this.handleInfix(atom.value.replaceWith, numer, denom) ];
         }
+
+        body.push(atom);
     }
+    return body;
 };
 
 /**
@@ -151,53 +163,36 @@ Parser.prototype.parseExpression = function(breakOnInfix, breakOnToken) {
  *
  * @returns {Array}
  */
-// Parser.prototype.handleInfixNodes = function(body) {
-//     var overIndex = -1;
-//     var funcName;
+Parser.prototype.handleInfix = function(funcName, numerBody, denomBody) {
+    // Check if we broke on Infix, inside an Infix.
+    var lastToken = denomBody[denomBody.length - 1];
+    if (lastToken && lastToken.type === "infix") {
+        throw new ParseError("Only one infix operator per group",  
+            this.lexer, -1);
+    }
 
-//     for (var i = 0; i < body.length; i++) {
-//         var node = body[i];
-//         if (node.type === "infix") {
-//             if (overIndex !== -1) {
-//                 throw new ParseError("only one infix operator per group",
-//                     this.lexer, -1);
-//             }
-//             overIndex = i;
-//             funcName = node.value.replaceWith;
-//         }
-//     }
+    var numerNode, denomNode;
+    if (numerBody.length === 1 && numerBody[0].type === "ordgroup") {
+        numerNode = numerBody[0];
+    } else {
+        numerNode = new ParseNode("ordgroup", numerBody, this.mode);
+    }
 
-//     if (overIndex !== -1) {
-//         var numerNode;
-//         var denomNode;
+    if (denomBody.length === 1 && denomBody[0].type === "ordgroup") {
+        denomNode = denomBody[0];
+    } else {
+        denomNode = new ParseNode("ordgroup", denomBody, this.mode);
+    }
 
-//         var numerBody = body.slice(0, overIndex);
-//         var denomBody = body.slice(overIndex + 1);
-
-//         if (numerBody.length === 1 && numerBody[0].type === "ordgroup") {
-//             numerNode = numerBody[0];
-//         } else {
-//             numerNode = new ParseNode("ordgroup", numerBody, this.mode);
-//         }
-
-//         if (denomBody.length === 1 && denomBody[0].type === "ordgroup") {
-//             denomNode = denomBody[0];
-//         } else {
-//             denomNode = new ParseNode("ordgroup", denomBody, this.mode);
-//         }
-
-//         var value = this.callFunction(
-//             funcName, [numerNode, denomNode], null);
-//         return [new ParseNode(value.type, value, this.mode)];
-//     } else {
-//         return body;
-//     }
-// };
+    var value = this.callFunction(
+        funcName, [numerNode, denomNode], null);
+    return new ParseNode(value.type, value, this.mode);
+};
 
 // The greediness of a superscript or subscript
 var SUPSUB_GREEDINESS = 1;
 
-Parser.prtototype.tryFunctionExpand = function(parentGreediness, pos) {
+Parser.prototype.tryFunctionExpand = function(parentGreediness, pos) {
     var token = this.nextToken.text;
 
     if (this.isFunction(token)) {
@@ -206,8 +201,7 @@ Parser.prtototype.tryFunctionExpand = function(parentGreediness, pos) {
             return this.parseFunction();
         } else {
             throw new ParseError(
-                "Got function '" + token + "' with no arguments " +
-                    "as " + name,
+                "Got function '" + token + "' with no arguments.",
                 this.lexer, pos);
         }
     } else {
@@ -283,12 +277,12 @@ Parser.prototype.handleUnsupportedCmd = function() {
  *
  * @return {?ParseNode}
  */
-Parser.prototype.parseAtom = function() {
+Parser.prototype.parseAtom = function(body) {
     // First we check if we have a either a Symbol, a
     // function, an implicit group, or explicit group, etc.
-    var base = this.parseSymbol()        ||
-               this.parseImplicitGroup() ||
-               this.parseGroup()         ||
+    var base = this.parseSymbol()            ||
+               this.parseImplicitGroup(body) ||
+               this.parseGroup()             ||
                this.parseFunction();
 
     // In text mode, we don't have superscripts or subscripts
@@ -391,7 +385,7 @@ var styleFuncs = [
  *
  * @return {?ParseNode}
  */
-Parser.prototype.parseImplicitGroup = function() {
+Parser.prototype.parseImplicitGroup = function(mathlist) {
     var func = this.nextToken.text;
     var body;
 
@@ -443,6 +437,7 @@ Parser.prototype.parseImplicitGroup = function() {
         return result;
     } else if (utils.contains(sizeFuncs, func)) {
         // If we see a sizing function, parse out the implict body
+        this.consume();
         body = this.parseExpression(false);
         return new ParseNode("sizing", {
             // Figure out what size to use based on the list of functions above
@@ -451,6 +446,7 @@ Parser.prototype.parseImplicitGroup = function() {
         }, this.mode);
     } else if (utils.contains(styleFuncs, func)) {
         // If we see a styling function, parse out the implict body
+        this.consume();
         body = this.parseExpression(true);
         return new ParseNode("styling", {
             // Figure out what style to use by pulling out the style from
@@ -472,7 +468,7 @@ Parser.prototype.parseImplicitGroup = function() {
  * @return {?ParseNode}
  */
 Parser.prototype.parseFunction = function(funcName) {
-    var func = this.nextToken;
+    var func = this.nextToken.text;
     var funcData = functions[func];
 
     if (funcData) {
@@ -482,6 +478,7 @@ Parser.prototype.parseFunction = function(funcName) {
                 this.lexer, this.position);
         }
 
+        this.consume();
         var args = this.parseArguments(func, funcData);
         var result = this.callFunction(func, args, args.pop());
         return new ParseNode(result.type, result, this.mode);
@@ -526,31 +523,36 @@ Parser.prototype.parseArguments = function(func, funcData) {
     var positions = [this.pos];
     var args = [];
 
-    for (var i = 0; i < numOptArgs; i++) {
+    for (var i = 0; i < numOptArgs + numArgs; i++) {
         var argType = funcData.argTypes && funcData.argTypes[i];
         var arg;
 
-        if (argType) {
-            arg = this.parseSpecialGroup(argType, true);
+        if (i < numOptArgs) {
+            if (argType) {
+                arg = this.parseSpecialGroup(argType, true);
+            } else {
+                arg = this.parseOptionalGroup(argType);
+            }
         } else {
-            if (i < numOptArgs) {
-                arg = this.parseOptionalGroup();
+            if (argType) {
+                arg = this.parseSpecialGroup(argType, false);
             } else {
                 arg = this.parseSymbol() ||
                       this.parseGroup()  ||
                       this.tryFunctionExpand(baseGreediness);
             }
+
+            // Error if no argument is given for required argument
+            if (!arg) {
+                arg = this.expectedGroupError(func, this.pos);
+            }
         }
 
-        // Error if not given an argument for non-optional argument.
-        if (!arg && i >= numOptArgs) {
-            arg = this.expectedGroupError(func, this.pos);
-        }
-
-        args.push(arg ? arg : null);
+        args.push(arg);
         positions.push(this.pos);
     }
 
+    args.push(positions);
     return args;
 };
 
@@ -605,7 +607,7 @@ Parser.prototype.parseSpecialGroup = function(innerMode, optional) {
     if (optional) {
         res = this.parseOptionalGroup();
     } else {
-        res = this.parseGroup();
+        res = this.parseSymbol() || this.parseGroup() || this.tryFunctionExpand();
     }
     this.mode = outerMode;
     this.nextToken = this.lexer.lex(this.pos, outerMode);
@@ -626,7 +628,7 @@ Parser.prototype.parseGroup = function() {
         var expression = this.parseExpression(false);
         // Make sure we get a close brace
         this.expect("}");
-        return new new ParseNode("ordgroup", expression, this.mode);
+        return new ParseNode("ordgroup", expression, this.mode);
     } else {
         return null;
     }
@@ -646,7 +648,7 @@ Parser.prototype.parseOptionalGroup = function() {
         var expression = this.parseExpression(false, "]");
         // Make sure we get a close bracket
         this.expect("]");
-        return new new ParseNode("ordgroup", expression, this.mode);
+        return new ParseNode("ordgroup", expression, this.mode);
     } else {
         return null;
     }
@@ -660,15 +662,25 @@ Parser.prototype.parseOptionalGroup = function() {
  * @return {?ParseFuncOrArgument}
  */
 Parser.prototype.parseSymbol = function() {
-    var symbol = symbols[this.mode][this.nextToken.text];
+    // TODO (cbreeden) hopefully we can get rid of the function check.
+    var token = this.nextToken;
+    if (this.isFunction(token.text)) {
+        return null;
+    }
+
+    var symbol = symbols[this.mode][token.text];
 
     if (symbol) {
         this.consume();
-        return new ParseNode(symbol.group, symbol, this.mode);
+        return new ParseNode(symbol.group, token.text, this.mode);
     } else {
         return null;
     }
 };
+
+Parser.prototype.isFunction = function(name) {
+    return functions.hasOwnProperty(name);
+}
 
 Parser.prototype.ParseNode = ParseNode;
 
