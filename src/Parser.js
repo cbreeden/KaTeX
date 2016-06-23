@@ -104,7 +104,7 @@ Parser.prototype.parse = function() {
 // currently parsing a styles expression or an infix expression. This
 // is needed to handle inline styles in our recursive strategy properly.
 var STYLES = 1;
-var INFIX = 2;
+var INFIX  = 2;
 
 var endOfExpression = ["}", "\\end", "\\right", "&", "\\\\", "\\cr", "EOF"];
 
@@ -205,15 +205,15 @@ var SUPSUB_GREEDINESS = 1;
  */
 
 Parser.prototype.tryFunctionExpand = function(parentGreediness) {
-    var token = this.nextToken.text;
+    var func = this.nextToken.text;
 
-    if (this.isFunction(token)) {
-        var funcGreediness = functions[token].greediness;
+    if (this.isFunction(func)) {
+        var funcGreediness = functions[func].greediness;
         if (funcGreediness > parentGreediness) {
             return this.parseFunction();
         } else {
             throw new ParseError(
-                "Got function '" + token + "' with no arguments.",
+                "Got function '" + func + "' with no arguments.",
                 this.lexer, this.pos);
         }
     } else {
@@ -225,14 +225,13 @@ Parser.prototype.tryFunctionExpand = function(parentGreediness) {
  * Handle a subscript or superscript with nice errors.
  */
 Parser.prototype.handleSupSubscript = function(name) {
-    var symPos = this.pos;
     this.consume();
 
     var group = this.parseSymbol() ||
                 this.parseGroup()  ||
                 this.tryFunctionExpand(SUPSUB_GREEDINESS);
 
-    return group ? group : this.expectedGroupError(name, symPos + 1);
+    return group ? group : this.expectedGroupError(name, this.pos + 1);
 };
 
 /**
@@ -669,7 +668,7 @@ Parser.prototype.isFunction = function(name) {
 }
 
 /***
- * 
+ * Throw an error if you were expecting a group and didnt get one.
  */
 
 Parser.prototype.expectedGroupError = function(symbol, pos) {
